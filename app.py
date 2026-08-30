@@ -3,7 +3,15 @@ import pandas as pd
 import json
 import os
 
+# --- Configurations ---
 DATA_FILE = "user_expenses.json"
+
+# Set custom app name and icon here
+st.set_page_config(
+    page_title="My Wallet App",       # Change the title here
+    page_icon="💳",                   # Change the emoji or image URL here (e.g., 💳, 💸, 🪙, 📊)
+    layout="centered"
+)
 
 # --- Helper Functions for Data Handling ---
 def load_all_data():
@@ -21,16 +29,13 @@ def save_user_expenses(username, expenses):
     with open(DATA_FILE, "w") as file:
         json.dump(data, file, indent=4)
 
-# --- Page Setup ---
-st.set_page_config(page_title="Personal Expense Tracker", page_icon="💰", layout="centered")
-
 # --- Authentication State ---
 if "logged_in_user" not in st.session_state:
     st.session_state.logged_in_user = None
 
 # --- Login / Switch User Screen ---
 if not st.session_state.logged_in_user:
-    st.title("🔒 Personal Expense Tracker")
+    st.title("🔒 My Wallet App")
     st.subheader("Login to your private workspace")
 
     username_input = st.text_input("Enter your name or unique username:").strip().lower()
@@ -48,12 +53,12 @@ all_data = load_all_data()
 user_expenses = all_data.get(current_user, [])
 
 # Sidebar info and Logout
-st.sidebar.write(f"Logged in as: **{current_user}**")
+st.sidebar.write(f"Logged in as: **{current_user.capitalize()}**")
 if st.sidebar.button("Log Out"):
     st.session_state.logged_in_user = None
     st.rerun()
 
-st.title(f"💰 {current_user.capitalize()}'s Expense Tracker")
+st.title(f"💳 {current_user.capitalize()}'s Expense Tracker")
 
 # --- Form: Add New Expense ---
 with st.expander("➕ Add a New Expense", expanded=True):
@@ -81,9 +86,11 @@ with st.expander("➕ Add a New Expense", expanded=True):
 if len(user_expenses) > 0:
     df = pd.DataFrame(user_expenses)
 
+    # Total Spent Metric
     total_spent = df["amount"].sum()
     st.metric(label="Total Spending", value=f"₹{total_spent:,.2f}")
 
+    # Tabs for Data and Charts
     tab1, tab2 = st.tabs(["📋 View All", "📊 Category Breakdown"])
 
     with tab1:
