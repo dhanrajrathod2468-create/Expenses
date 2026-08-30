@@ -2,18 +2,22 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import hashlib
 
 # --- Configurations ---
-DATA_FILE = "user_expenses.json"
+DATA_FILE = "secure_expenses.json"
 
-# Set custom app name and icon here
 st.set_page_config(
-    page_title="My Wallet App",       # Change the title here
-    page_icon="💳",                   # Change the emoji or image URL here (e.g., 💳, 💸, 🪙, 📊)
+    page_title="My Wallet App",
+    page_icon="💳",
     layout="centered"
 )
 
-# --- Helper Functions for Data Handling ---
+# --- Helper Functions for Data & Security ---
+def hash_pin(pin: str) -> str:
+    """Hash the PIN using SHA-256 for secure storage."""
+    return hashlib.sha256(pin.encode()).hexdigest()
+
 def load_all_data():
     if os.path.exists(DATA_FILE):
         try:
@@ -23,9 +27,7 @@ def load_all_data():
             return {}
     return {}
 
-def save_user_expenses(username, expenses):
-    data = load_all_data()
-    data[username] = expenses
+def save_all_data(data):
     with open(DATA_FILE, "w") as file:
         json.dump(data, file, indent=4)
 
@@ -33,26 +35,47 @@ def save_user_expenses(username, expenses):
 if "logged_in_user" not in st.session_state:
     st.session_state.logged_in_user = None
 
-# --- Login / Switch User Screen ---
+# --- Login / Register Screen ---
 if not st.session_state.logged_in_user:
-    st.title("🔒 My Wallet App")
-    st.subheader("Login to your private workspace")
+    st.title("🔒 My Secure Wallet")
+    st.write("Enter your nickname and a 4-digit PIN to access your private expenses.")
 
-    username_input = st.text_input("Enter your name or unique username:").strip().lower()
-    if st.button("Enter Tracker"):
-        if username_input:
-            st.session_state.logged_in_user = username_input
-            st.rerun()
+    nickname = st.text_input("Nickname:").strip().lower()
+    pin = st.text_input("4-Digit PIN:", type="password", max_chars=8).strip()
+
+    if st.button("Unlock / Enter Tracker", use_container_width=True):
+        if not nickname or not pin:
+            st.warning("Please enter both a nickname and a PIN.")
         else:
-            st.warning("Please enter a username to proceed.")
+            data = load_all_data()
+            hashed = hash_pin(pin)
+
+            # If user already exists, verify PIN
+            if nickname in data:
+                if data[nickname].get("pin") == hashed:
+                    st.session_state.logged_in_user = nickname
+                    st.rerun()
+                else:
+                    st.error("❌ Incorrect PIN for this nickname. Please try again.")
+            else:
+                # If new user, create account and save PIN
+                data[nickname] = {
+                    "pin": hashed,
+                    "expenses": []
+                }
+                save_all_data(data)
+                st.session_state.logged_in_user = nickname
+                st.rerun()
+
     st.stop()
 
 # --- Authenticated App View ---
 current_user = st.session_state.logged_in_user
 all_data = load_all_data()
-user_expenses = all_data.get(current_user, [])
+user_profile = all_data.get(current_user, {"pin": "", "expenses": []})
+user_expenses = user_profile.get("expenses", [])
 
-# Sidebar info and Logout
+# Sidebar and Logout
 st.sidebar.write(f"Logged in as: **{current_user.capitalize()}**")
 if st.sidebar.button("Log Out"):
     st.session_state.logged_in_user = None
@@ -78,7 +101,8 @@ with st.expander("➕ Add a New Expense", expanded=True):
                 "note": note.strip()
             }
             user_expenses.append(new_expense)
-            save_user_expenses(current_user, user_expenses)
+            all_data[current_user]["expenses"] = user_expenses
+            save_all_data(all_data)
             st.success(f"✅ Added: {category} - ₹{amount:.2f}")
             st.rerun()
 
@@ -96,7 +120,8 @@ if len(user_expenses) > 0:
     with tab1:
         st.dataframe(df, use_container_width=True)
         if st.button("🗑️ Clear My Expenses"):
-            save_user_expenses(current_user, [])
+            all_data[current_user]["expenses"] = []
+            save_all_data(all_data)
             st.rerun()
 
     with tab2:
